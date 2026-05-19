@@ -41,10 +41,10 @@ async function updateContextMenu() {
         return;
     }
 
-    // Create a single parent menu "Send to ntfy" for ALL contexts
+    // Create a single parent menu "Ntfy for Chrome" for ALL contexts
     chrome.contextMenus.create({
         id: PARENT_MENU_ID,
-        title: 'Send to ntfy',
+        title: 'Ntfy for Chrome',
         contexts: ['all']
     });
 

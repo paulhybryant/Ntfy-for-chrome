@@ -48,15 +48,20 @@ document.addEventListener('DOMContentLoaded', () => {
     status: document.getElementById('status'),
     settingsStatus: document.getElementById('settings-status'),
 
-    // Content sections
-    mainContent: document.getElementById('main-content'),
-
     // Settings inputs
     urlInput: document.getElementById('url-input'),
     tokenInput: document.getElementById('token-input'),
     topicsContainer: document.getElementById('topics-container'),
     newTopicInput: document.getElementById('new-topic-input'),
     topicInputHint: document.getElementById('topic-input-hint'),
+
+    // Recent Notifications
+    notificationsList: document.getElementById('notifications-list'),
+    refreshNotificationsBtn: document.getElementById('refresh-notifications-btn'),
+
+    // Tabs
+    tabButtons: document.querySelectorAll('.tab-btn'),
+    tabContents: document.querySelectorAll('.tab-content'),
   };
 
   // State
@@ -70,6 +75,9 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   let tags = []; // State for tags
+  let readMessageIds = []; // State for read notifications
+  let deletedMessageIds = []; // State for deleted notifications (client-side only)
+  let activeTab = 'send'; // Active tab state
 
   // Drag and drop state
   let dragSrcIndex = null;
@@ -86,6 +94,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function init() {
     await loadConfig();
+    await loadLocalState();
     await restoreDraftState();
     await checkSessionAndCleanup(); // Check session and cleanup old files if needed
     await loadStoredFile();
@@ -405,6 +414,30 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  function getFromStorageLocal(keys) {
+    return new Promise((resolve, reject) => {
+      chrome.storage.local.get(keys, items => {
+        if (chrome.runtime.lastError) {
+          reject(chrome.runtime.lastError);
+        } else {
+          resolve(items);
+        }
+      });
+    });
+  }
+
+  function saveToStorageLocal(data) {
+    return new Promise((resolve, reject) => {
+      chrome.storage.local.set(data, () => {
+        if (chrome.runtime.lastError) {
+          reject(chrome.runtime.lastError);
+        } else {
+          resolve();
+        }
+      });
+    });
+  }
+
   async function getPageUrl() {
     return new Promise((resolve, reject) => {
       chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
@@ -482,6 +515,30 @@ document.addEventListener('DOMContentLoaded', () => {
     // Custom topic dropdown
     elements.topicDropdownSelected.addEventListener('click', toggleTopicDropdown);
 
+    // Tab switching
+    elements.tabButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tab = btn.dataset.tab;
+        if (tab === activeTab) return;
+
+        activeTab = tab;
+
+        // Update active button class
+        elements.tabButtons.forEach(b => b.classList.toggle('active', b === btn));
+
+        // Update active content class
+        elements.tabContents.forEach(content => {
+          const isTarget = content.id === `tab-content-${tab}`;
+          content.classList.toggle('active', isTarget);
+        });
+
+        // Load notifications on-demand when switching to receive tab
+        if (activeTab === 'receive') {
+          loadNotifications();
+        }
+      });
+    });
+
     // Close dropdown when clicking outside
     document.addEventListener('click', (e) => {
       if (!elements.topicDropdown.contains(e.target)) {
@@ -495,6 +552,9 @@ document.addEventListener('DOMContentLoaded', () => {
         loadStoredFile();
       }
     });
+
+    // Refresh notifications
+    elements.refreshNotificationsBtn.addEventListener('click', loadNotifications);
 
     setupTooltips();
 
@@ -533,7 +593,7 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.backBtn.classList.remove('visible');
     elements.settingsBtn.style.display = '';
     elements.openUrlBtn.style.display = '';
-    elements.headerText.textContent = 'Send to ntfy';
+    elements.headerText.textContent = 'Ntfy for Chrome';
     isSettingsView = false;
 
     // Refresh UI to reflect any changes made in settings
@@ -548,7 +608,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const isConfigured = config.apiUrl && config.topics.length > 0;
 
     // Toggle disabled state on form and highlight on settings button
-    elements.mainContent.classList.toggle('disabled', !isConfigured);
+    elements.mainView.classList.toggle('disabled', !isConfigured);
     elements.settingsBtn.classList.toggle('highlight', !isConfigured);
 
     // Enable/disable the open URL button based on configuration
@@ -611,6 +671,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Save the selected topic
     config.lastTopic = topic;
     saveToStorage({ lastTopic: topic });
+
+    // Load notifications for the new topic if we are on the receive tab
+    if (activeTab === 'receive') {
+      loadNotifications();
+    }
   }
 
   function updateCustomDropdownSelection(selectedValue) {
@@ -1114,6 +1179,213 @@ document.addEventListener('DOMContentLoaded', () => {
   function handleGlobalKeyup(e) {
     if (e.code === 'ControlRight') {
       rightCtrlDown = false;
+    }
+  }
+
+  // ==================
+  // Recent Notifications
+  // ==================
+
+  async function loadNotifications() {
+    const topic = elements.topicSelect.value;
+    if (!topic || !config.apiUrl) {
+      elements.notificationsList.innerHTML = '<div class="notifications-empty">Configure server and select a topic to view notifications</div>';
+      return;
+    }
+
+    elements.notificationsList.innerHTML = '<div class="notifications-loading">Loading notifications...</div>';
+
+    try {
+      const apiConfig = {
+        apiUrl: config.apiUrl,
+        accessToken: config.accessToken
+      };
+      const notifications = (await NtfyAPI.getNotifications(apiConfig, topic))
+        .filter(notification => !deletedMessageIds.includes(notification.id));
+      
+      elements.notificationsList.innerHTML = '';
+
+      if (notifications.length === 0) {
+        elements.notificationsList.innerHTML = '<div class="notifications-empty">No recent notifications</div>';
+        return;
+      }
+
+      // Sort notifications by time descending (newest first)
+      notifications.sort((a, b) => b.time - a.time);
+
+      notifications.forEach(notification => {
+        const item = document.createElement('div');
+        item.className = 'notification-item';
+        item.dataset.priority = notification.priority || 3;
+
+        const isRead = readMessageIds.includes(notification.id);
+        if (isRead) {
+          item.classList.add('read');
+        }
+
+        const header = document.createElement('div');
+        header.className = 'notification-header';
+
+        const title = document.createElement('span');
+        title.className = 'notification-title';
+        title.textContent = notification.title || 'Notification';
+        header.appendChild(title);
+
+        const time = document.createElement('span');
+        time.className = 'notification-time';
+        time.textContent = formatTime(notification.time);
+        header.appendChild(time);
+
+        item.appendChild(header);
+
+        const message = document.createElement('div');
+        message.className = 'notification-message';
+        message.textContent = notification.message || '';
+        item.appendChild(message);
+
+        // Footer for tags and actions
+        const footer = document.createElement('div');
+        footer.className = 'notification-footer';
+
+        if (notification.tags && notification.tags.length > 0) {
+          const tagsContainer = document.createElement('div');
+          tagsContainer.className = 'notification-tags';
+          notification.tags.forEach(tag => {
+            const tagSpan = document.createElement('span');
+            tagSpan.className = 'notification-tag';
+            tagSpan.textContent = tag;
+            tagsContainer.appendChild(tagSpan);
+          });
+          footer.appendChild(tagsContainer);
+        }
+
+        // Actions
+        const actions = document.createElement('div');
+        actions.className = 'notification-actions';
+
+        const readBtn = document.createElement('button');
+        readBtn.className = 'notification-action-btn read-btn';
+        readBtn.textContent = '✓';
+        readBtn.title = isRead ? 'Mark as Unread' : 'Mark as Read';
+        readBtn.addEventListener('click', () => handleMarkAsRead(notification.id, item, readBtn));
+        actions.appendChild(readBtn);
+
+        if (notification.attachment && notification.attachment.url) {
+          const linkBtn = document.createElement('button');
+          linkBtn.className = 'notification-action-btn link-btn';
+          linkBtn.textContent = '🔗';
+          linkBtn.title = 'Copy Attachment Link';
+          linkBtn.addEventListener('click', () => handleCopyLink(notification.attachment.url, linkBtn));
+          actions.appendChild(linkBtn);
+        }
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'notification-action-btn delete-btn';
+        deleteBtn.textContent = '×';
+        deleteBtn.title = 'Delete Notification';
+        deleteBtn.addEventListener('click', () => handleDelete(notification.id, item));
+        actions.appendChild(deleteBtn);
+
+        footer.appendChild(actions);
+        item.appendChild(footer);
+
+        elements.notificationsList.appendChild(item);
+      });
+    } catch (error) {
+      console.error('Error loading notifications:', error);
+      elements.notificationsList.innerHTML = `<div class="notifications-error">Error: ${error.message}</div>`;
+    }
+  }
+
+  function formatTime(unixTimestamp) {
+    const date = new Date(unixTimestamp * 1000);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+
+    if (diffMins < 1) {
+      return 'Just now';
+    } else if (diffMins < 60) {
+      return `${diffMins}m ago`;
+    } else if (diffHours < 24) {
+      return `${diffHours}h ago`;
+    } else {
+      return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    }
+  }
+
+  async function loadLocalState() {
+    try {
+      const result = await getFromStorageLocal(['readMessageIds', 'deletedMessageIds']);
+      readMessageIds = result.readMessageIds || [];
+      deletedMessageIds = result.deletedMessageIds || [];
+    } catch (error) {
+      console.error('Error loading local state:', error);
+    }
+  }
+
+  async function handleMarkAsRead(messageId, itemElement, btnElement) {
+    const index = readMessageIds.indexOf(messageId);
+    if (index > -1) {
+      // Make unread
+      readMessageIds.splice(index, 1);
+      itemElement.classList.remove('read');
+      btnElement.title = 'Mark as Read';
+    } else {
+      // Make read
+      readMessageIds.push(messageId);
+      itemElement.classList.add('read');
+      btnElement.title = 'Mark as Unread';
+    }
+
+    try {
+      await saveToStorageLocal({ readMessageIds: readMessageIds });
+    } catch (error) {
+      console.error('Error saving readMessageIds:', error);
+    }
+  }
+
+  async function handleDelete(messageId, itemElement) {
+    try {
+      if (!deletedMessageIds.includes(messageId)) {
+        deletedMessageIds.push(messageId);
+        await saveToStorageLocal({ deletedMessageIds: deletedMessageIds });
+      }
+      
+      itemElement.remove();
+
+      const index = readMessageIds.indexOf(messageId);
+      if (index > -1) {
+        readMessageIds.splice(index, 1);
+        await saveToStorageLocal({ readMessageIds: readMessageIds });
+      }
+
+      if (elements.notificationsList.children.length === 0) {
+        elements.notificationsList.innerHTML = '<div class="notifications-empty">No recent notifications</div>';
+      }
+    } catch (error) {
+      console.error('Error deleting notification locally:', error);
+      showStatus('Failed to delete notification', 'error');
+    }
+  }
+
+  async function handleCopyLink(url, btnElement) {
+    try {
+      await navigator.clipboard.writeText(url);
+      const originalTitle = btnElement.title;
+      btnElement.title = 'Copied!';
+      btnElement.style.color = 'var(--primary-light)';
+      
+      showStatus('Attachment link copied!', 'success');
+
+      setTimeout(() => {
+        btnElement.title = originalTitle;
+        btnElement.style.color = '';
+      }, 2000);
+    } catch (err) {
+      console.error('Failed to copy link:', err);
+      showStatus('Failed to copy link', 'error');
     }
   }
 

@@ -1,23 +1,29 @@
-# <img src="icons/icon48.png" alt="Logo" width="40" height="40" style="vertical-align: middle;"> Send to ntfy
+# <img src="icons/icon48.png" alt="Logo" width="40" height="40" style="vertical-align: middle;"> Ntfy for Chrome
 
 [![Build Extension](https://github.com/TheDuffman85/send_to_ntfy_extension/actions/workflows/build.yml/badge.svg)](https://github.com/TheDuffman85/send_to_ntfy_extension/actions/workflows/build.yml)
 
-A browser extension to send the notifications to [ntfy.sh](https://ntfy.sh) or your self-hosted ntfy server.
+A browser extension to send and receive notifications to/from [ntfy.sh](https://ntfy.sh) or your self-hosted ntfy server.
 
 > [!NOTE]
 > This is an unofficial extension and is not affiliated with the ntfy.sh project.
 
 ## Features
 
-- **Context Menu**: Right-click to send selected text, images, or the current page URL directly to ntfy.
-- **File Upload**: Easily upload and send files to your ntfy topics.
-- **Quick Sharing**: Send the current page URL or custom text to your ntfy topics.
-- **Keyboard Shortcuts**: Send messages quickly with `Right Ctrl + Enter`.
-- **Custom Configuration**: Support for self-hosted ntfy servers.
-- **Authentication**: Optional support for token-based authentication.
-- **Privacy First**: No tracking, just simple functionality.
-- **Modern UI**: Clean interface with Dark Mode support.
-- **Cross-Browser**: Supports Chrome, Firefox, and Edge (Manifest V3).
+- **Send Notifications**:
+  - **Context Menu**: Right-click to send selected text, images, or the current page URL directly to ntfy.
+  - **File Upload**: Easily upload and send files to your ntfy topics.
+  - **Quick Sharing**: Send the current page URL or custom text to your ntfy topics.
+- **Receive & Manage Notifications**:
+  - **Notifications List**: View recent cached notifications for your selected topic directly in the popup.
+  - **Interactive Actions**: Mark notifications as read (local-only fading effect) or delete them (client-side hide) instantly.
+  - **Refresh**: Manually reload notifications to get the latest updates.
+- **General**:
+  - **Keyboard Shortcuts**: Send messages quickly with `Right Ctrl + Enter`.
+  - **Custom Configuration**: Support for self-hosted ntfy servers.
+  - **Authentication**: Optional support for token-based authentication.
+  - **Privacy First**: No tracking, local storage is used for notification states.
+  - **Modern UI**: Clean interface with Dark Mode support.
+  - **Cross-Browser**: Supports Chrome, Firefox, and Edge (Manifest V3).
 
 ## Installation
 

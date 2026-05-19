@@ -27,7 +27,7 @@
     <div class="header-left">
       <div class="header-title">
         <img src="icons/icon48.png" alt="ntfy" style="width: 20px; height: 20px;">
-        <span id="header-text">Send to ntfy</span>
+        <span id="header-text">Ntfy for Chrome</span>
       </div>
     </div>
     <div class="header-actions">
@@ -52,97 +52,127 @@
   </div>
 
   <!-- Main View -->
+  <!-- Main View -->
   <div class="view active" id="main-view">
-    <div class="main-content" id="main-content">
-      <!-- Topic Selection -->
-      <div class="form-group">
-        <label class="form-label">Topic</label>
-        <div class="custom-dropdown" id="topic-dropdown">
-          <div class="custom-dropdown-selected" id="topic-dropdown-selected">
-            <span id="topic-dropdown-text">Select topic...</span>
-          </div>
-          <div class="custom-dropdown-arrow">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12">
-              <path d="M2 4l4 4 4-4" />
-            </svg>
-          </div>
-          <div class="custom-dropdown-options" id="topic-dropdown-options"></div>
-        </div>
-        <select class="form-select" id="topic-select"></select>
-      </div>
+    <!-- Tab Bar -->
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="send">Send</button>
+      <button class="tab-btn" data-tab="receive">Receive</button>
+    </div>
 
-      <!-- Title (Optional) -->
-      <div class="form-group">
-        <label class="form-label" for="title-input">Title</label>
-        <input type="text" class="form-input" id="title-input">
-      </div>
-
-      <!-- Message -->
-      <div class="form-group">
-        <label class="form-label" for="message-input">Message</label>
-      </div>
-      <textarea class="form-textarea" id="message-input" rows="3"></textarea>
-
-
-      <!-- File Attachment -->
-      <div class="file-section">
-        <div class="file-input-wrapper">
-          <input type="file" class="file-input" id="file-input">
-          <button class="file-btn" id="file-btn">
-            📎 Attach file
-          </button>
-        </div>
-        <div class="file-preview" id="file-preview">
-          <span class="file-icon">📄</span>
-          <div class="file-info">
-            <div class="file-name" id="file-name"></div>
-            <div class="file-size" id="file-size"></div>
-          </div>
-          <button class="file-remove" id="file-remove" title="Remove file">×</button>
-        </div>
-      </div>
-
-      <!-- Advanced Options Toggle -->
-      <div class="advanced-toggle" id="advanced-toggle">
-        <span class="arrow">▶</span>
-        Advanced options
-      </div>
-
-      <!-- Advanced Options -->
-      <div class="advanced-options" id="advanced-options">
-        <!-- Priority -->
+    <!-- Tab Contents -->
+    <!-- Send Tab -->
+    <div class="tab-content active" id="tab-content-send">
+      <div class="main-content" id="main-content">
+        <!-- Topic Selection -->
         <div class="form-group">
-          <label class="form-label">Priority</label>
-          <div class="chips" id="priority-chips">
-            <button class="chip" data-priority="1"><span class="p-icon">⇊</span>Min</button>
-            <button class="chip" data-priority="2"><span class="p-icon">↓</span>Low</button>
-            <button class="chip active" data-priority="3">Default</button>
-            <button class="chip" data-priority="4"><span class="p-icon">↑</span>High</button>
-            <button class="chip" data-priority="5"><span class="p-icon">⇈</span>Urgent</button>
+          <label class="form-label">Topic</label>
+          <div class="custom-dropdown" id="topic-dropdown">
+            <div class="custom-dropdown-selected" id="topic-dropdown-selected">
+              <span id="topic-dropdown-text">Select topic...</span>
+            </div>
+            <div class="custom-dropdown-arrow">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12">
+                <path d="M2 4l4 4 4-4" />
+              </svg>
+            </div>
+            <div class="custom-dropdown-options" id="topic-dropdown-options"></div>
           </div>
+          <select class="form-select" id="topic-select"></select>
         </div>
 
-        <!-- Tags -->
+        <!-- Title (Optional) -->
         <div class="form-group">
-          <label class="form-label">Tags</label>
-          <div class="tags-container" id="tags-container">
-            <input type="text" class="tag-input-field" id="new-tag-input">
-            <span class="tag-input-hint" id="tag-input-hint">Press enter to add tag</span>
+          <label class="form-label" for="title-input">Title</label>
+          <input type="text" class="form-input" id="title-input">
+        </div>
+
+        <!-- Message -->
+        <div class="form-group">
+          <label class="form-label" for="message-input">Message</label>
+        </div>
+        <textarea class="form-textarea" id="message-input" rows="3"></textarea>
+
+        <!-- File Attachment -->
+        <div class="file-section">
+          <div class="file-input-wrapper">
+            <input type="file" class="file-input" id="file-input">
+            <button class="file-btn" id="file-btn">
+              📎 Attach file
+            </button>
+          </div>
+          <div class="file-preview" id="file-preview">
+            <span class="file-icon">📄</span>
+            <div class="file-info">
+              <div class="file-name" id="file-name"></div>
+              <div class="file-size" id="file-size"></div>
+            </div>
+            <button class="file-remove" id="file-remove" title="Remove file">×</button>
+          </div>
+        </div>
+
+        <!-- Advanced Options Toggle -->
+        <div class="advanced-toggle" id="advanced-toggle">
+          <span class="arrow">▶</span>
+          Advanced options
+        </div>
+
+        <!-- Advanced Options -->
+        <div class="advanced-options" id="advanced-options">
+          <!-- Priority -->
+          <div class="form-group">
+            <label class="form-label">Priority</label>
+            <div class="chips" id="priority-chips">
+              <button class="chip" data-priority="1"><span class="p-icon">⇊</span>Min</button>
+              <button class="chip" data-priority="2"><span class="p-icon">↓</span>Low</button>
+              <button class="chip active" data-priority="3">Default</button>
+              <button class="chip" data-priority="4"><span class="p-icon">↑</span>High</button>
+              <button class="chip" data-priority="5"><span class="p-icon">⇈</span>Urgent</button>
+            </div>
+          </div>
+
+          <!-- Tags -->
+          <div class="form-group">
+            <label class="form-label">Tags</label>
+            <div class="tags-container" id="tags-container">
+              <input type="text" class="tag-input-field" id="new-tag-input">
+              <span class="tag-input-hint" id="tag-input-hint">Press enter to add tag</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Send Footer -->
+        <div class="send-footer">
+          <div class="send-another-group">
+            <input type="checkbox" id="send-another-checkbox">
+            <label for="send-another-checkbox">Send another</label>
+          </div>
+          <button class="send-btn" id="send-btn">Send</button>
+        </div>
+
+        <!-- Status Message -->
+        <div class="status" id="status"></div>
+      </div>
+    </div>
+
+    <!-- Receive Tab -->
+    <div class="tab-content" id="tab-content-receive">
+      <div class="main-content">
+        <!-- Notifications Section -->
+        <div class="notifications-section" id="notifications-section">
+          <div class="section-header">
+            <span class="section-title">Notifications</span>
+            <button class="icon-btn" id="refresh-notifications-btn" title="Refresh">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16">
+                <path fill="currentColor" d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+              </svg>
+            </button>
+          </div>
+          <div class="notifications-list" id="notifications-list">
+            <div class="notifications-loading">Loading notifications...</div>
           </div>
         </div>
       </div>
-
-      <!-- Send Footer -->
-      <div class="send-footer">
-        <div class="send-another-group">
-          <input type="checkbox" id="send-another-checkbox">
-          <label for="send-another-checkbox">Send another</label>
-        </div>
-        <button class="send-btn" id="send-btn">Send</button>
-      </div>
-
-      <!-- Status Message -->
-      <div class="status" id="status"></div>
     </div>
   </div>
 

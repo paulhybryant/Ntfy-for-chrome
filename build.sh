@@ -9,7 +9,7 @@ target=$1
 FILES="manifest.json popup.html popup.js filepicker.html filepicker.js background.js ntfy.js styles.css icons fonts"
 
 build_chrome() {
-  rm -f build/send-to-ntfy-chrome.zip
+  rm -f build/ntfy-for-chrome.zip
   echo "Building for Chrome..."
   
   # Create temp config
@@ -20,10 +20,10 @@ build_chrome() {
   node build-manifest.js chrome > "$TEMP_DIR/manifest.json"
   
   # zip
-  (cd "$TEMP_DIR" && zip -r "$OLDPWD/build/send-to-ntfy-chrome.zip" .)
+  (cd "$TEMP_DIR" && zip -r "$OLDPWD/build/ntfy-for-chrome.zip" .)
   
   rm -rf "$TEMP_DIR"
-  echo "Chrome build created at build/send-to-ntfy-chrome.zip"
+  echo "Chrome build created at build/ntfy-for-chrome.zip"
 }
 
 build_firefox() {

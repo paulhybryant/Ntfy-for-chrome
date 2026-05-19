@@ -202,5 +202,51 @@ const NtfyAPI = {
         }
 
         return this.sendAttachment(config, topic, { data: imageBuffer, filename });
+    },
+
+    /**
+     * Fetch cached notifications for a topic
+     * @param {Object} config - Configuration object with apiUrl and accessToken
+     * @param {string} topic - Topic to fetch from
+     * @param {string} [since] - Optional since parameter (default 'all')
+     * @returns {Promise<Array>} - Array of notification objects
+     */
+    async getNotifications(config, topic, since = 'all') {
+        const baseUrl = config.apiUrl;
+        if (!baseUrl) {
+            throw new Error('API URL is not configured');
+        }
+
+        const fullUrl = `${this.buildTopicUrl(baseUrl, topic)}/json?poll=1&since=${since}`;
+        const headers = this.buildAuthHeaders(config.accessToken, baseUrl);
+
+        const response = await fetch(fullUrl, {
+            method: 'GET',
+            headers: headers
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const text = await response.text();
+        if (!text.trim()) {
+            return [];
+        }
+
+        // Parse NDJSON
+        return text.split('\n')
+            .filter(line => line.trim())
+            .map(line => {
+                try {
+                    return JSON.parse(line);
+                } catch (e) {
+                    console.error('Failed to parse notification line:', e, line);
+                    return null;
+                }
+            })
+            .filter(Boolean)
+            // Filter out non-message events
+            .filter(msg => msg.event === 'message');
     }
 };
