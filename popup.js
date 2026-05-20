@@ -57,7 +57,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Recent Notifications
     notificationsList: document.getElementById('notifications-list'),
-    refreshNotificationsBtn: document.getElementById('refresh-notifications-btn'),
 
     // Tabs
     tabButtons: document.querySelectorAll('.tab-btn'),
@@ -107,6 +106,9 @@ document.addEventListener('DOMContentLoaded', () => {
     renderTags();
     // Set focus on message input when popup opens
     elements.messageInput.focus();
+
+    // Trigger initial sync in background
+    chrome.runtime.sendMessage({ action: 'sync' });
   }
 
   // ==================
@@ -535,6 +537,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Load notifications on-demand when switching to receive tab
         if (activeTab === 'receive') {
           loadNotifications();
+          chrome.runtime.sendMessage({ action: 'sync' });
         }
       });
     });
@@ -546,15 +549,20 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
 
-    // Listen for file selection from external picker
+    // Listen for storage changes for live UI updates and external picker
     chrome.storage.onChanged.addListener((changes, area) => {
-      if (area === 'local' && changes.storedFile) {
-        loadStoredFile();
+      if (area === 'local') {
+        if (changes.storedFile) {
+          loadStoredFile();
+        }
+        if (changes.receivedNotifications || changes.readMessageIds) {
+          console.log('Local notifications history changed, re-rendering...');
+          loadLocalState().then(() => {
+            loadNotifications();
+          });
+        }
       }
     });
-
-    // Refresh notifications
-    elements.refreshNotificationsBtn.addEventListener('click', loadNotifications);
 
     setupTooltips();
 
@@ -1196,11 +1204,11 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.notificationsList.innerHTML = '<div class="notifications-loading">Loading notifications...</div>';
 
     try {
-      const apiConfig = {
-        apiUrl: config.apiUrl,
-        accessToken: config.accessToken
-      };
-      const notifications = (await NtfyAPI.getNotifications(apiConfig, topic))
+      const localData = await getFromStorageLocal(['receivedNotifications']);
+      const allNotifications = localData.receivedNotifications || [];
+
+      const notifications = allNotifications
+        .filter(notification => notification.topic === topic)
         .filter(notification => !deletedMessageIds.includes(notification.id));
       
       elements.notificationsList.innerHTML = '';

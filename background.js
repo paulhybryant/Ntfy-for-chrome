@@ -6,25 +6,45 @@ if (typeof importScripts === 'function') {
     importScripts('ntfy.js');
 }
 
+// WebSocket & Background Sync State
+let ws = null;
+let reconnectTimer = null;
+let reconnectDelay = 5000;
+const MAX_RECONNECT_DELAY = 60000;
+const MAX_HISTORY_ITEMS = 50;
+
+
 const PARENT_MENU_ID = 'ntfy-parent';
 const SEND_SELECTION_ID = 'ntfy-send-selection';
 const SEND_IMAGE_ID = 'ntfy-send-image';
 const SEND_LINK_ID = 'ntfy-send-link'; // Replaced SEND_PAGE_ID
 const SEND_TAB_ID = 'ntfy-send-tab';
 
-// Initialize context menu on install and startup
+// Initialize context menu, WebSocket, and alarms on install and startup
 chrome.runtime.onInstalled.addListener(() => {
     updateContextMenu();
+    initWebSocket();
+    setupAlarm();
 });
 
 chrome.runtime.onStartup.addListener(() => {
     updateContextMenu();
+    initWebSocket();
+    setupAlarm();
 });
 
-// Listen for storage changes to update menu when topics change
+// Listen for storage changes to update context menu, WebSocket config, and unread badge
 chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === 'sync' && changes.topics) {
-        updateContextMenu();
+    if (area === 'sync') {
+        if (changes.topics || changes.apiUrl || changes.accessToken) {
+            updateContextMenu();
+            initWebSocket();
+        }
+    }
+    if (area === 'local') {
+        if (changes.receivedNotifications || changes.readMessageIds || changes.deletedMessageIds) {
+            updateUnreadBadge();
+        }
     }
 });
 
@@ -272,11 +292,312 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 });
 
 // Show a temporary badge on the extension icon
+// Show a temporary badge on the extension icon (restores unread count after 2s)
 function showBadge(text, color) {
     chrome.action.setBadgeText({ text: text });
     chrome.action.setBadgeBackgroundColor({ color: color });
 
     setTimeout(() => {
-        chrome.action.setBadgeText({ text: '' });
+        updateUnreadBadge();
     }, 2000);
 }
+
+// ========================================
+// WebSocket & Background Sync Logic
+// ========================================
+
+async function initWebSocket() {
+    const config = await NtfyAPI.getConfig();
+    if (!config.apiUrl || config.topics.length === 0) {
+        console.log('ntfy is not configured, skipping WebSocket connection.');
+        closeWebSocket();
+        return;
+    }
+
+    if (ws) {
+        if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+            const expectedUrl = buildWsUrl(config);
+            if (ws.url === expectedUrl) {
+                return;
+            }
+            console.log('Configuration changed, reconnecting WebSocket...');
+        }
+    }
+
+    connectWebSocket(config);
+}
+
+function closeWebSocket() {
+    if (ws) {
+        ws.onclose = null;
+        ws.close();
+        ws = null;
+    }
+    if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+    }
+}
+
+function buildWsUrl(config) {
+    let baseUrl = config.apiUrl;
+    
+    if (baseUrl.startsWith('https://')) {
+        baseUrl = baseUrl.replace('https://', 'wss://');
+    } else if (baseUrl.startsWith('http://')) {
+        baseUrl = baseUrl.replace('http://', 'ws://');
+    } else {
+        baseUrl = 'wss://' + baseUrl;
+    }
+
+    if (baseUrl.endsWith('/')) {
+        baseUrl = baseUrl.slice(0, -1);
+    }
+
+    const topicsJoined = config.topics.join(',');
+    let wsUrl = `${baseUrl}/${topicsJoined}/ws`;
+
+    if (config.accessToken) {
+        const authString = `Bearer ${config.accessToken}`;
+        const base64Auth = btoa(unescape(encodeURIComponent(authString)));
+        wsUrl += `?auth=${encodeURIComponent(base64Auth)}`;
+    } else {
+        try {
+            const urlObj = new URL(config.apiUrl);
+            if (urlObj.username || urlObj.password) {
+                const username = decodeURIComponent(urlObj.username);
+                const password = decodeURIComponent(urlObj.password);
+                const auth = btoa(unescape(encodeURIComponent(`${username}:${password}`)));
+                wsUrl += `?auth=Basic ${auth}`;
+            }
+        } catch (e) {}
+    }
+
+    return wsUrl;
+}
+
+async function connectWebSocket(config) {
+    closeWebSocket();
+
+    const wsUrl = buildWsUrl(config);
+    console.log('Connecting WebSocket to:', wsUrl.split('?')[0]);
+
+    try {
+        ws = new WebSocket(wsUrl);
+
+        ws.onopen = () => {
+            console.log('WebSocket connected successfully.');
+            reconnectDelay = 5000;
+            syncMissedMessages();
+            updateUnreadBadge(); // Initial badge sync
+        };
+
+        ws.onmessage = async (event) => {
+            try {
+                const message = JSON.parse(event.data);
+                if (message.event === 'message') {
+                    await handleIncomingMessage(message);
+                }
+            } catch (e) {
+                console.error('Error processing WebSocket message:', e);
+            }
+        };
+
+        ws.onclose = (event) => {
+            console.log(`WebSocket closed. Code: ${event.code}, Reason: ${event.reason}. Reconnecting...`);
+            scheduleReconnect(config);
+        };
+
+        ws.onerror = (error) => {
+            console.error('WebSocket error:', error);
+        };
+    } catch (error) {
+        console.error('Failed to create WebSocket:', error);
+        scheduleReconnect(config);
+    }
+}
+
+function scheduleReconnect(config) {
+    if (reconnectTimer) return;
+
+    console.log(`Scheduling WebSocket reconnect in ${reconnectDelay / 1000}s...`);
+    reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        NtfyAPI.getConfig().then(currentConfig => {
+            if (currentConfig.apiUrl && currentConfig.topics.length > 0) {
+                reconnectDelay = Math.min(reconnectDelay * 2, MAX_RECONNECT_DELAY);
+                connectWebSocket(currentConfig);
+            }
+        });
+    }, reconnectDelay);
+}
+
+async function handleIncomingMessage(notification) {
+    console.log('Received notification:', notification.id, notification.title);
+
+    await saveNotificationToHistory(notification);
+    await chrome.storage.local.set({ lastNotificationId: notification.id });
+    showDesktopNotification(notification);
+}
+
+async function saveNotificationToHistory(notification) {
+    return new Promise((resolve) => {
+        chrome.storage.local.get(['receivedNotifications', 'deletedMessageIds'], (result) => {
+            let history = result.receivedNotifications || [];
+            const deletedIds = result.deletedMessageIds || [];
+
+            if (deletedIds.includes(notification.id)) {
+                resolve();
+                return;
+            }
+
+            if (history.some(n => n.id === notification.id)) {
+                resolve();
+                return;
+            }
+
+            history.unshift(notification);
+
+            if (history.length > MAX_HISTORY_ITEMS) {
+                history = history.slice(0, MAX_HISTORY_ITEMS);
+            }
+
+            chrome.storage.local.set({ receivedNotifications: history }, () => {
+                resolve();
+            });
+        });
+    });
+}
+
+function showDesktopNotification(notification) {
+    const priorityLabels = {
+        1: '⇊ Min',
+        2: '↓ Low',
+        4: '↑ High',
+        5: '⇈ Urgent'
+    };
+    const priorityLabel = priorityLabels[notification.priority] ? ` [${priorityLabels[notification.priority]}]` : '';
+
+    const buttons = [];
+    if (notification.attachment && notification.attachment.url) {
+        buttons.push({ title: '🔗 Open Attachment' });
+    }
+
+    chrome.notifications.create(notification.id, {
+        type: 'basic',
+        iconUrl: 'icons/icon128.png',
+        title: (notification.title || 'Notification') + priorityLabel,
+        message: notification.message || '',
+        contextMessage: `Topic: ${notification.topic}`,
+        buttons: buttons,
+        requireInteraction: notification.priority >= 4
+    });
+}
+
+// Handle desktop notification button clicks (Open attachment URL in new tab)
+chrome.notifications.onButtonClicked.addListener((notificationId, buttonIndex) => {
+    if (buttonIndex === 0) {
+        chrome.storage.local.get(['receivedNotifications'], (result) => {
+            const history = result.receivedNotifications || [];
+            const notification = history.find(n => n.id === notificationId);
+            if (notification && notification.attachment && notification.attachment.url) {
+                chrome.tabs.create({ url: notification.attachment.url });
+            }
+        });
+    }
+});
+
+async function syncMissedMessages() {
+    const config = await NtfyAPI.getConfig();
+    if (!config.apiUrl || config.topics.length === 0) return;
+
+    chrome.storage.local.get(['lastNotificationId'], async (result) => {
+        const lastId = result.lastNotificationId;
+        if (!lastId) {
+            console.log('No lastNotificationId found, doing initial historical fetch...');
+            await fetchHistoricalNotifications(config);
+            return;
+        }
+
+        console.log(`Syncing missed messages since ID: ${lastId}`);
+        
+        for (const topic of config.topics) {
+            try {
+                const missed = await NtfyAPI.getNotifications(config, topic, lastId);
+                if (missed && missed.length > 0) {
+                    console.log(`Found ${missed.length} missed messages in topic: ${topic}`);
+                    for (const notification of missed) {
+                        await handleIncomingMessage(notification);
+                    }
+                }
+            } catch (error) {
+                console.error(`Failed to sync missed messages for topic ${topic}:`, error);
+            }
+        }
+    });
+}
+
+async function fetchHistoricalNotifications(config) {
+    for (const topic of config.topics) {
+        try {
+            const messages = await NtfyAPI.getNotifications(config, topic, '24h');
+            if (messages && messages.length > 0) {
+                messages.sort((a, b) => a.time - b.time);
+                
+                const newest = messages[messages.length - 1];
+                await chrome.storage.local.set({ lastNotificationId: newest.id });
+
+                for (const notification of messages) {
+                    await saveNotificationToHistory(notification);
+                }
+            }
+        } catch (error) {
+            console.error(`Failed to fetch historical notifications for topic ${topic}:`, error);
+        }
+    }
+}
+
+function setupAlarm() {
+    chrome.alarms.create('ws-keepalive', { periodInMinutes: 1 });
+}
+
+// Alarm Listener for keep-alive and missed sync
+chrome.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name === 'ws-keepalive') {
+        console.log('Keep-alive alarm fired, ensuring WebSocket is connected...');
+        initWebSocket();
+        syncMissedMessages();
+    }
+});
+
+async function updateUnreadBadge() {
+    chrome.storage.local.get(['receivedNotifications', 'readMessageIds', 'deletedMessageIds'], (result) => {
+        const history = result.receivedNotifications || [];
+        const readIds = result.readMessageIds || [];
+        const deletedIds = result.deletedMessageIds || [];
+
+        // Unread count = history items that are NOT deleted AND NOT read
+        const unreadCount = history
+            .filter(n => !deletedIds.includes(n.id))
+            .filter(n => !readIds.includes(n.id))
+            .length;
+
+        if (unreadCount > 0) {
+            chrome.action.setBadgeText({ text: unreadCount.toString() });
+            chrome.action.setBadgeBackgroundColor({ color: '#f44336' });
+        } else {
+            chrome.action.setBadgeText({ text: '' });
+        }
+    });
+}
+
+// Listen for manual sync requests from popup
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === 'sync') {
+        console.log('Sync request received from popup, forcing sync...');
+        syncMissedMessages().then(() => {
+            sendResponse({ success: true });
+        });
+        return true;
+    }
+});
