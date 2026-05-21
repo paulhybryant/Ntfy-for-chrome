@@ -61,10 +61,11 @@ async function updateContextMenu() {
         return;
     }
 
-    // Create a single parent menu "Ntfy for Chrome" for ALL contexts
+    // Create a single parent menu dynamically from manifest name
+    const manifest = chrome.runtime.getManifest();
     chrome.contextMenus.create({
         id: PARENT_MENU_ID,
-        title: 'Ntfy for Chrome',
+        title: manifest.name,
         contexts: ['all']
     });
 
@@ -341,7 +342,7 @@ function closeWebSocket() {
 
 function buildWsUrl(config) {
     let baseUrl = config.apiUrl;
-    
+
     if (baseUrl.startsWith('https://')) {
         baseUrl = baseUrl.replace('https://', 'wss://');
     } else if (baseUrl.startsWith('http://')) {
@@ -520,7 +521,7 @@ async function syncMissedMessages() {
         }
 
         console.log(`Syncing missed messages since ID: ${lastId}`);
-        
+
         for (const topic of config.topics) {
             try {
                 const missed = await NtfyAPI.getNotifications(config, topic, lastId);
@@ -543,7 +544,7 @@ async function fetchHistoricalNotifications(config) {
             const messages = await NtfyAPI.getNotifications(config, topic, '24h');
             if (messages && messages.length > 0) {
                 messages.sort((a, b) => a.time - b.time);
-                
+
                 const newest = messages[messages.length - 1];
                 await chrome.storage.local.set({ lastNotificationId: newest.id });
 

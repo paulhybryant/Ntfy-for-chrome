@@ -110,6 +110,10 @@ document.addEventListener('DOMContentLoaded', () => {
     applyTheme();
     // Render initial empty tags or restored ones
     renderTags();
+    // Set header title dynamically from manifest
+    const manifest = chrome.runtime.getManifest();
+    elements.headerText.textContent = manifest.name;
+
     // Set focus on message input when popup opens
     elements.messageInput.focus();
 
@@ -147,7 +151,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       if (items.lastTags) {
-        // Only set tags if they weren't already set by draft restore? 
+        // Only set tags if they weren't already set by draft restore?
         // Actually loadConfig runs before restoreDraftState, so draft state will overwrite if exists. Correct.
         tags = Array.isArray(items.lastTags) ? items.lastTags : [];
       }
@@ -611,7 +615,10 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.backBtn.classList.remove('visible');
     elements.settingsBtn.style.display = '';
     elements.openUrlBtn.style.display = '';
-    elements.headerText.textContent = 'Ntfy for Chrome';
+
+    const manifest = chrome.runtime.getManifest();
+    elements.headerText.textContent = manifest.name;
+
     isSettingsView = false;
 
     // Refresh UI to reflect any changes made in settings
@@ -793,7 +800,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Adjust index if moving item from earlier position to later position
       // because removal shifts indices
-      // Note: Splice logic actually handles "insert at index" naturally, 
+      // Note: Splice logic actually handles "insert at index" naturally,
       // but interpretation of "drop on" varies.
       // Current implementation: Remove then Insert.
 
@@ -1220,7 +1227,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const notifications = allNotifications
         .filter(notification => notification.topic === topic)
         .filter(notification => !deletedMessageIds.includes(notification.id));
-      
+
       // Save currently visible notifications for bulk actions
       currentNotifications = notifications;
 
@@ -1376,7 +1383,7 @@ document.addEventListener('DOMContentLoaded', () => {
         deletedMessageIds.push(messageId);
         await saveToStorageLocal({ deletedMessageIds: deletedMessageIds });
       }
-      
+
       itemElement.remove();
 
       const index = readMessageIds.indexOf(messageId);
@@ -1400,7 +1407,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const originalTitle = btnElement.title;
       btnElement.title = 'Copied!';
       btnElement.style.color = 'var(--primary-light)';
-      
+
       showStatus('Attachment link copied!', 'success');
 
       setTimeout(() => {
