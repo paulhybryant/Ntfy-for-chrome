@@ -569,7 +569,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (changes.storedFile) {
           loadStoredFile();
         }
-        if (changes.receivedNotifications || changes.readMessageIds) {
+        if (changes.receivedNotifications || changes.readMessageIds || changes.deletedMessageIds) {
           console.log('Local notifications history changed, re-rendering...');
           loadLocalState().then(() => {
             loadNotifications();
