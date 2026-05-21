@@ -61,6 +61,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Tabs
     tabButtons: document.querySelectorAll('.tab-btn'),
     tabContents: document.querySelectorAll('.tab-content'),
+
+    // Bulk Actions Control Bar
+    notificationsControlBar: document.getElementById('notifications-control-bar'),
+    markAllReadBtn: document.getElementById('mark-all-read-btn'),
+    deleteAllBtn: document.getElementById('delete-all-btn'),
   };
 
   // State
@@ -77,6 +82,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let readMessageIds = []; // State for read notifications
   let deletedMessageIds = []; // State for deleted notifications (client-side only)
   let activeTab = 'send'; // Active tab state
+  let currentNotifications = []; // Currently displayed notifications for the active topic
 
   // Drag and drop state
   let dragSrcIndex = null;
@@ -541,6 +547,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
     });
+
+    // Bulk actions
+    elements.markAllReadBtn.addEventListener('click', handleMarkAllRead);
+    elements.deleteAllBtn.addEventListener('click', handleDeleteAll);
 
     // Close dropdown when clicking outside
     document.addEventListener('click', (e) => {
@@ -1211,6 +1221,12 @@ document.addEventListener('DOMContentLoaded', () => {
         .filter(notification => notification.topic === topic)
         .filter(notification => !deletedMessageIds.includes(notification.id));
       
+      // Save currently visible notifications for bulk actions
+      currentNotifications = notifications;
+
+      // Show control bar only if there are notifications to manage
+      elements.notificationsControlBar.style.display = notifications.length > 0 ? 'flex' : 'none';
+
       elements.notificationsList.innerHTML = '';
 
       if (notifications.length === 0) {
@@ -1394,6 +1410,66 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (err) {
       console.error('Failed to copy link:', err);
       showStatus('Failed to copy link', 'error');
+    }
+  }
+
+  async function handleMarkAllRead() {
+    if (currentNotifications.length === 0) return;
+
+    let updated = false;
+    currentNotifications.forEach(notification => {
+      if (!readMessageIds.includes(notification.id)) {
+        readMessageIds.push(notification.id);
+        updated = true;
+      }
+    });
+
+    if (updated) {
+      try {
+        await saveToStorageLocal({ readMessageIds: readMessageIds });
+        showStatus('All marked as read', 'success');
+      } catch (error) {
+        console.error('Error saving readMessageIds:', error);
+        showStatus('Failed to mark all as read', 'error');
+      }
+    }
+  }
+
+  async function handleDeleteAll() {
+    if (currentNotifications.length === 0) return;
+
+    const topic = elements.topicSelect.value;
+    if (!confirm(`Are you sure you want to delete all notifications in topic "${topic}"?`)) {
+      return;
+    }
+
+    try {
+      let updatedDeleted = false;
+      let updatedRead = false;
+
+      currentNotifications.forEach(notification => {
+        if (!deletedMessageIds.includes(notification.id)) {
+          deletedMessageIds.push(notification.id);
+          updatedDeleted = true;
+        }
+        const readIndex = readMessageIds.indexOf(notification.id);
+        if (readIndex > -1) {
+          readMessageIds.splice(readIndex, 1);
+          updatedRead = true;
+        }
+      });
+
+      if (updatedDeleted) {
+        await saveToStorageLocal({ deletedMessageIds: deletedMessageIds });
+      }
+      if (updatedRead) {
+        await saveToStorageLocal({ readMessageIds: readMessageIds });
+      }
+
+      showStatus('All notifications deleted', 'success');
+    } catch (error) {
+      console.error('Error performing bulk delete:', error);
+      showStatus('Failed to delete all', 'error');
     }
   }
 
