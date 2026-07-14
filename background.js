@@ -235,13 +235,23 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     try {
         if (menuId === SEND_SELECTION_ID || menuId.startsWith(SEND_SELECTION_ID)) {
             // Send selected text
+            let message = info.selectionText;
+            if (config.includeUrl && tab && tab.url) {
+                const formattedUrl = tab.url.replace(/\/$/, '');
+                message = `${message}\n\nSent from: ${formattedUrl}`;
+            }
             await NtfyAPI.sendNotification(config, topic, {
-                message: info.selectionText
+                message: message
             });
             showBadge('✓', '#4CAF50');
         } else if (menuId === SEND_IMAGE_ID || menuId.startsWith(SEND_IMAGE_ID)) {
             // Send image
-            await NtfyAPI.sendImageFromUrl(config, topic, info.srcUrl);
+            let message = '';
+            if (config.includeUrl && tab && tab.url) {
+                const formattedUrl = tab.url.replace(/\/$/, '');
+                message = `Sent from: ${formattedUrl}`;
+            }
+            await NtfyAPI.sendImageFromUrl(config, topic, info.srcUrl, message);
             showBadge('✓', '#4CAF50');
         } else if (menuId === SEND_LINK_ID || menuId.startsWith(SEND_LINK_ID)) {
             // Send link URL
@@ -273,8 +283,14 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
                 console.error('Failed to retrieve link text:', e);
             }
 
+            let message = urlToSend;
+            if (config.includeUrl && tab && tab.url) {
+                const formattedUrl = tab.url.replace(/\/$/, '');
+                message = `${message}\n\nSent from: ${formattedUrl}`;
+            }
+
             await NtfyAPI.sendNotification(config, topic, {
-                message: urlToSend,
+                message: message,
                 title: titleToSend
             });
             showBadge('✓', '#4CAF50');

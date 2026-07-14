@@ -51,6 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Settings inputs
     urlInput: document.getElementById('url-input'),
     tokenInput: document.getElementById('token-input'),
+    includeUrlCheckbox: document.getElementById('include-url-checkbox'),
     topicsContainer: document.getElementById('topics-container'),
     newTopicInput: document.getElementById('new-topic-input'),
     topicInputHint: document.getElementById('topic-input-hint'),
@@ -92,7 +93,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let isSettingsView = false;
   let rightCtrlDown = false;
 
-  const STORAGE_KEYS = ['topics', 'apiUrl', 'accessToken', 'theme', 'priority', 'lastTags', 'lastTopic', 'sendAnotherEnabled'];
+  const STORAGE_KEYS = ['topics', 'apiUrl', 'accessToken', 'theme', 'priority', 'lastTags', 'lastTopic', 'sendAnotherEnabled', 'includeUrl'];
 
   // Initialize
   init();
@@ -136,11 +137,13 @@ document.addEventListener('DOMContentLoaded', () => {
         accessToken: items.accessToken || '',
 
         theme: items.theme || 'auto',
-        sendAnotherEnabled: items.sendAnotherEnabled === true
+        sendAnotherEnabled: items.sendAnotherEnabled === true,
+        includeUrl: items.includeUrl === true
       };
 
       // Restore 'Send another' checkbox state
       elements.sendAnotherCheckbox.checked = config.sendAnotherEnabled;
+      elements.includeUrlCheckbox.checked = config.includeUrl;
 
       if (items.priority) {
         selectedPriority = items.priority;
@@ -166,7 +169,8 @@ document.addEventListener('DOMContentLoaded', () => {
       accessToken: elements.tokenInput.value,
       topics: config.topics.join(','), // Use current config state which is kept in sync
 
-      theme: config.theme
+      theme: config.theme,
+      includeUrl: elements.includeUrlCheckbox.checked
     };
 
     try {
@@ -482,6 +486,10 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.tokenInput.addEventListener('input', () => {
       // showSettingsStatus('Saving...', 'visible');
       debouncedSave();
+    });
+
+    elements.includeUrlCheckbox.addEventListener('change', () => {
+      saveConfig();
     });
 
 
@@ -1009,8 +1017,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function sendNotification() {
     const topic = elements.topicSelect.value;
-    const message = elements.messageInput.value.trim();
+    const rawMessage = elements.messageInput.value.trim();
     const title = elements.titleInput.value.trim();
+
+    let message = rawMessage;
+    if (config.includeUrl && config.pageUrl) {
+      const formattedUrl = config.pageUrl.replace(/\/$/, '');
+      if (rawMessage) {
+        message = `${rawMessage}\n\nSent from: ${formattedUrl}`;
+      } else {
+        message = `Sent from: ${formattedUrl}`;
+      }
+    }
     const tagsString = tags.join(','); // Use tags array
 
     const storedFile = await new Promise((resolve) => {

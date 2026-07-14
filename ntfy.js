@@ -8,11 +8,12 @@ const NtfyAPI = {
      */
     async getConfig() {
         return new Promise((resolve) => {
-            chrome.storage.sync.get(['apiUrl', 'accessToken', 'topics'], (items) => {
+            chrome.storage.sync.get(['apiUrl', 'accessToken', 'topics', 'includeUrl'], (items) => {
                 resolve({
                     apiUrl: items.apiUrl || '',
                     accessToken: items.accessToken || '',
-                    topics: items.topics ? items.topics.split(',').map(t => t.trim()).filter(Boolean) : []
+                    topics: items.topics ? items.topics.split(',').map(t => t.trim()).filter(Boolean) : [],
+                    includeUrl: items.includeUrl === true
                 });
             });
         });
@@ -174,7 +175,7 @@ const NtfyAPI = {
      * @param {string} imageUrl - URL of the image to fetch and send
      * @returns {Promise<Response>}
      */
-    async sendImageFromUrl(config, topic, imageUrl) {
+    async sendImageFromUrl(config, topic, imageUrl, message) {
         // Fetch the image
         const imageResponse = await fetch(imageUrl);
         if (!imageResponse.ok) {
@@ -201,7 +202,7 @@ const NtfyAPI = {
             filename = 'image.png';
         }
 
-        return this.sendAttachment(config, topic, { data: imageBuffer, filename });
+        return this.sendAttachment(config, topic, { data: imageBuffer, filename, message });
     },
 
     /**
